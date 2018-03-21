@@ -1,16 +1,22 @@
 # cpiclasser
-## A program for 
 
 **AUTHOR**: Ross Beck-MacNeil (CPD) ross.beck-macneil@canada.ca
-**README LAST MODIFIED**: March 16, 2018
+
+**README LAST MODIFIED**: March 21, 2018
 
 ## DESCRIPTION:
 This Python program classifies products to the CPI classification
 based on text descriptions of the product.
 
 ## HOW TO USE:
-call python on folder like so:
+If there is a pretrained model, you can call python on the folder like so:
+```
 python cpiclasser in_path out_path -index
+```
+Otherwise, you can import it a module:
+```python
+python cpiclasser in_path out_path -index
+```
 
 ## FOR HELP (and explanation of arguments):
 python cpiclasser -h

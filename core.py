@@ -5,10 +5,6 @@ Created on Wed Mar  7 10:07:38 2018
 
 This module contains functions and classes that are useful at both train and
 test time.
-
-This module contains functions and classes which help develop,
-train and deploy machine learning models based on Tensorflow
-that classify scanner and webscraped data to the CPI product classification.
 """
 import pandas as pd
 import re
@@ -144,17 +140,9 @@ class NeuralContainer(object):
     def encode_labels(self, targets):
         return targets.map(self.labels["prediction_idx"]).values
 
-    def create_model(self, embedding_size=100, batch_norm=True,
-                     learned_weights="embedding", lr=0.007, dropout=0.0, l2_reg=1e-6, **kwargs):
+    def create_model(self, embedding_size=100, non_linear=False, 
+	                 lr=0.002, dropout=0.1, l2_reg=1e-6, **kwargs):
 
-        #embedding_reg = (l2_reg * self.num_labels)/ (self.vocab_size * embedding_size)
-        #weight_reg = (l2_reg * self.num_labels)/ (self.vocab_size)
-
-        #l2_reg is appplied to weights final dense prediction layer
-        #a multiple is applied to the embedding layer, to account for differences in the number of parametts
-
-        #target lengths should be a dictionary with the name of the target as key and number of unique classes as vlaue
-        #might want to change if not using BA
         seqs = layers.Input(shape=(self.seq_len,), name ="seqs")
         
         #embeddings will be regularized (lower variance, closer to 0), if embeddings_lambda > 0
@@ -170,6 +158,10 @@ class NeuralContainer(object):
         weights = layers.Dropout(dropout)(weights)
 
         average = WeigtedAverage(name="average")([embeddings,weights])
+        
+        if non_linear:
+            average = layers.Dense(name="non_linear")(units=embedding_size, activation="tanh")
+            average = layers.Dropout(dropout)(average)
 
         #batch_normalization is a good regularizer...
         probabilities = layers.Dense(units=self.num_labels, activation="softmax",
@@ -204,10 +196,7 @@ class NeuralContainer(object):
             results["Pred_Prob" + str(i)] = sorted_probs[:,i]
         return pd.DataFrame(results)
     
-#this is a custom Keras layer
-#it is bery basic and not very elegant
-#but it works
-#when load a Keras model, will nee to point to this
+#custom Keras layer fo average embedding using weights
 class WeigtedAverage(layers.Layer):
     def __init__(self, **kwargs):
         super(WeigtedAverage, self).__init__(**kwargs)
