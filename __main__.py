@@ -1,5 +1,5 @@
 ﻿"""
-This Python program classifies products to the CPI classification
+This Python script classifies products to the CPI classification
 based on text descriptions of the product.
 """
 import sys

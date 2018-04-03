@@ -1,0 +1,16 @@
+#Folders
+#not excluding any at the moment, relying on exclusion of formats
+
+.pyc
+
+#Can't risk uploading Jupyter notebooks or data
+.ipynb
+.csv
+.pkl
+.hd5f
+.h5
+
+#IDE files
+.idea
+.vscode
+
