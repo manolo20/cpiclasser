@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""This module contiains code that is useful for training and evaulating
+the perfomance of a model.
+"""
 import operator
 import collections
 import itertools
@@ -185,8 +188,8 @@ class NNGridSearch():
             
             #first, create inputs
             #self.x is a tuple. First element is the seqs, second is weights for words.
-            seqs, seq_wghts = self.neural_helpers.sequence(self.text)
-            self.x = {"seqs":seqs, "seq_wghts":seq_wghts}
+            ids, weights = self.neural_helpers.sequence(self.text)
+            self.x = {"input_ids":ids, "input_weights":weights}
             
             #iterate through folds:
             for j, (train_index, valid_index) in enumerate(self.fold_indexes):
@@ -195,12 +198,13 @@ class NNGridSearch():
                 #need to call clear session to prevent accumlation in memory
                 K.clear_session()
                 #create model
-                model = self.neural_helpers.create_model(**params)
+                model, args = self.neural_helpers.create_model(**params)
+                #for checking defualts and such
+                args = {**args, **params}
                 self.x_train = {key: value[train_index] for (key, value) in self.x.items()}
                 self.x_valid = {key: value[valid_index] for (key, value) in self.x.items()}
                 self.y_train = self.y[train_index]
                 self.y_valid = self.y[valid_index]
-                
                 
                 self.validation_data=(self.x_valid, self.y_valid)
                 #return self.validation_data
@@ -227,7 +231,7 @@ class NNGridSearch():
                 print("\nCorresponding to an unweighted (unbalanced) accuracy of: {:.1%}".format(best_acc))
                 print("And to a weighted (balanced) loss of: {:.4}".format(best_loss))
                 #now save to dict
-                for key, value in params.items():
+                for key, value in args.items():
                     self.results[key].append(value)
                 #some more stats
                 self.results["best_f1"].append(best_f1)

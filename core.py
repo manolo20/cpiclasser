@@ -6,15 +6,19 @@ Created on Wed Mar  7 10:07:38 2018
 This module contains functions and classes that are useful at both train and
 test time.
 """
-import pandas as pd
+
 import re
 import numpy as np
+import pandas as pd
 from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.feature_extraction.text import strip_accents_ascii
-
+import scipy
 import keras
 from keras import layers
 from keras import backend as K
+import tensorflow as tf
+
+
 
 #this function creates character ngrams from a string
 #it incorporates some cleaning: all letters converted to lowercase and the stripping of non-alphanumeric character
@@ -82,49 +86,41 @@ def create_char_ngrams(string, ngram_range=(2,5)):
     for n in range(ngram_range[0], ngram_range[1]+1):
         #offset is start of string, and then increased
         offset = 0
-        ngrams.append(string[offset:offset + n])
-        while offset + n < s_len :
+        
+        while (offset + n) < s_len :
             offset += 1
             ngrams.append(string[offset:offset + n])
-        if offset == 1: #count a short string (s_len < n) only once
+        if offset <= 1: #count a short string (s_len < n) only once
             break
+        #only add if length > 0
+        ngrams.append(string[:n])
     return ngrams
 
 class Sequencer(object):
-    def __init__(self, seq_len=500, char_ngrams=(2,4), word_ngrams=(1,1), vocab_size=2**18):
+    def __init__(self, char_ngrams=(2,4), word_ngrams=(1,1), vocab_size=2**18):
 
         self.char_ngrams = char_ngrams
         self.word_ngrams = word_ngrams
         self.vocab_size = vocab_size
-        self.seq_len = seq_len
         self.tokenizer = TupleTokenizer(self.char_ngrams, self.char_ngrams)
         self.vectorizer = HashingVectorizer(tokenizer=self.tokenizer, norm=None, alternate_sign=False,
                                             lowercase=False, n_features=self.vocab_size)
     def __call__(self, tupled_inputs):
-        dtm = self.vectorizer.transform(tupled_inputs)
-        seqs = np.zeros((dtm.shape[0], self.seq_len), dtype=np.int32)
-        seq_wghts = np.zeros((dtm.shape[0], self.seq_len), dtype=np.float)
-        for i in range(dtm.shape[0]):
-            #do stuff to make certain max_len is respected
-            #first, extract indexes
-            indxs = np.arange(dtm.indptr[i],dtm.indptr[i+1])
-            num_tokens=len(indxs)
-            #now extract random indexes, up to max_len
-            indxs = indxs[np.random.permutation(min(self.seq_len,num_tokens))]
-            len_index=len(indxs)
-            #adding 1, since 0 is reserved for padding
-            seqs[i,:len_index]=dtm.indices[indxs]+1
-            seq_wghts[i,:len_index]=dtm.data[indxs]
-        return seqs, seq_wghts
+        weights = self.vectorizer.transform(tupled_inputs)
+        #incrmeenting cols  by one since tensorflow doesn't play well with sparse tensors that have 0 for data vlaue
+        shape = (weights.shape[0], weights.shape[1]+1)
+        weights = scipy.sparse.csr_matrix((weights.data, weights.indices+1, weights.indptr), shape=shape)
+        rows, cols = weights.nonzero()
+        ids = scipy.sparse.csr_matrix((cols, (rows, cols)), shape=weights.shape)
+        return ids, weights
+
     
 class NeuralContainer(object):
-    def __init__(self, labels, seq_len=500, char_ngrams=(2,4), word_ngrams=(1,1), vocab_size=2**18):
-        self.seq_len = seq_len
+    def __init__(self, labels, char_ngrams=(2,4), word_ngrams=(1,1), vocab_size=2**18):
         self.char_ngrams = char_ngrams
         self.word_ngrams = word_ngrams
         self.vocab_size = vocab_size
-
-        self.sequencer = Sequencer(self.seq_len, self.char_ngrams, self.word_ngrams, self.vocab_size)
+        self.sequencer = Sequencer(self.char_ngrams, self.word_ngrams, self.vocab_size)
 
         #labels shoud be a DataFrame with two columns: code and label
         #should be unique
@@ -140,39 +136,37 @@ class NeuralContainer(object):
     def encode_labels(self, targets):
         return targets.map(self.labels["prediction_idx"]).values
 
-    def create_model(self, embedding_size=100, non_linear=False, 
-	                 lr=0.002, dropout=0.1, l2_reg=1e-6, **kwargs):
-
-        seqs = layers.Input(shape=(self.seq_len,), name ="seqs")
+    def create_model(self, hidden_units=100, non_linear=False, 
+	                 lr=0.002, dropout=0.1, embeddings_regularizer=1e-6, **kwargs):
+        args = locals()
         
-        #embeddings will be regularized (lower variance, closer to 0), if embeddings_lambda > 0
-        embeddings = layers.Embedding(self.vocab_size+1, embedding_size, input_length=self.seq_len, mask_zero=True,
-                               embeddings_regularizer=keras.regularizers.l2(l2_reg), name='embeddings')(seqs)
+        input_ids = layers.Input(shape=(self.vocab_size+1,), sparse=True, dtype="int64", name="input_ids")
+        input_weights = layers.Input(shape=(self.vocab_size+1,), sparse=True, dtype="float32", name="input_weights")
+        
+        #need to add one, since this is also done by sequencer
+        embedded = SparseEmbedding(vocab_size=self.vocab_size+1,
+                                   embedding_size=hidden_units,
+                                   embeddings_regularizer=keras.regularizers.l2(embeddings_regularizer),
+                                   name="embedding")([input_ids, input_weights])
 
-        input_weights = layers.Input(shape=(self.seq_len,), name ="seq_wghts")
-
-        weights = layers.Reshape([self.seq_len,1])(input_weights)
-        #mask, sot that dropout will not drop 0s
-        weights = layers.Masking(name="mask")(weights)
         #some regularization in the form of dropout, if greater than 0
-        weights = layers.Dropout(dropout)(weights)
-
-        average = WeigtedAverage(name="average")([embeddings,weights])
+        embedded = layers.Dropout(dropout)(embedded)
         
         if non_linear:
-            average = layers.Dense(name="non_linear")(units=embedding_size, activation="tanh")
-            average = layers.Dropout(dropout)(average)
+            embedded = layers.Dense(units=hidden_units, activation="tanh", name="non_linear")(embedded)
+            embedded = layers.Dropout(dropout)(embedded)
 
-        #batch_normalization is a good regularizer...
         probabilities = layers.Dense(units=self.num_labels, activation="softmax",
-                                     name="probabilities")(average)
+                                     name="probabilities")(embedded)
 
-        classify_model = keras.Model(inputs=[seqs,input_weights], outputs=probabilities)
-        classify_model.compile(loss=keras.losses.sparse_categorical_crossentropy, optimizer=keras.optimizers.Nadam(lr), metrics=["acc"])
-        return classify_model
+        classify_model = keras.Model(inputs=[input_ids, input_weights], outputs=probabilities)
+        classify_model.compile(loss=keras.losses.sparse_categorical_crossentropy,
+                               optimizer=keras.optimizers.Nadam(lr),
+                               metrics=["acc"])
+        return classify_model, args
 
     def import_model(self, path):
-        model = keras.models.load_model(path, custom_objects={"WeigtedAverage":WeigtedAverage})
+        model = keras.models.load_model(path, custom_objects={"SparseEmbedding":SparseEmbedding})
         #now check if model is compatible with vocab size and seq length
         if model.get_layer("embeddings").input_dim != self.vocab_size +1:
             raise ValueError("Mismatch between sequencer and imported model's vocab size")
@@ -219,3 +213,55 @@ class WeigtedAverage(layers.Layer):
         avg = K.sum(inputs[0] * inputs[1], axis=1) / (K.sum(inputs[1], axis=1) + K.epsilon())
 
         return avg
+
+class SparseEmbedding(layers.Layer):
+    """This layer takes two 2d SparseTensor as inputs
+    and returns a dense 2d Tensor. It does this by embedding
+    and then combining the first SparseTensor, using the second as weights.
+    """
+    def __init__(self, vocab_size, embedding_size,
+                 embeddings_initializer='uniform',
+                 embeddings_regularizer=None,
+                 embeddings_constraint=None,
+                 input_length=None,
+                 combiner = "sum",
+                 **kwargs):
+        super(SparseEmbedding, self).__init__(**kwargs)
+
+        if combiner not in ["sum", "mean", "sqrtn"]:
+            ValueError('"combiner" must be one of "sum", "mean", "sqrtn"')
+        
+        self.combiner = combiner
+        self.vocab_size = vocab_size
+        self.embedding_size = embedding_size
+        self.embeddings_initializer = keras.initializers.get(embeddings_initializer)
+        self.embeddings_regularizer = keras.regularizers.get(embeddings_regularizer)
+        self.embeddings_constraint = keras.constraints.get(embeddings_constraint)
+        self.input_length = input_length
+
+    def build(self, input_shape):
+        self.embeddings = self.add_weight(
+            shape=(self.vocab_size, self.embedding_size),
+            initializer=self.embeddings_initializer,
+            name='embeddings',
+            regularizer=self.embeddings_regularizer,
+            constraint=self.embeddings_constraint)
+        self.built = True
+
+    def compute_output_shape(self, input_shape):
+        output_shape = input_shape[0][:-1] + (self.embedding_size,)
+        return output_shape
+    
+    def call(self, inputs):
+        #inputs should be a tuple, with first element is ids and second is weights
+        out = tf.nn.embedding_lookup_sparse(self.embeddings, inputs[0], inputs[1], combiner=self.combiner)
+        return out
+
+    def get_config(self):
+        config = {'vocab_size': self.vocab_size,
+                  'embedding_size': self.embedding_size,
+                  'embeddings_initializer': keras.initializers.serialize(self.embeddings_initializer),
+                  'embeddings_regularizer': keras.regularizers.serialize(self.embeddings_regularizer),
+                  'embeddings_constraint': keras.constraints.serialize(self.embeddings_constraint)}
+        base_config = super(SparseEmbedding, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
