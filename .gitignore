@@ -1,7 +1,9 @@
 #Folders
 #not excluding any at the moment, relying on exclusion of formats
 
+#compiled (?) python files
 .pyc
+__pycache__/
 
 #Can't risk uploading Jupyter notebooks or data
 .ipynb
