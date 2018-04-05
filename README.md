@@ -26,6 +26,8 @@ The *--index* option allows the inclusion of a unique identifier such as UPC or 
 python cpiclasser /my/home/dir/products_to_classify.csv /my/home/dir/classified_products.csv --index UPC
 ```
 
+Please note that the input file must be encoded as utf-8. 
+
 **N.B**: If accessing the package from the P drive, please make certain not
 to update or delete any files. It is probably best to make a copy of the notebooks
 to somewhere else.

@@ -200,6 +200,8 @@ class NNGridSearch():
                 #create model
                 model, args = self.neural_helpers.create_model(**params)
                 #for checking defualts and such
+                #but don't want self
+                del args["self"]
                 args = {**args, **params}
                 self.x_train = {key: value[train_index] for (key, value) in self.x.items()}
                 self.x_valid = {key: value[valid_index] for (key, value) in self.x.items()}

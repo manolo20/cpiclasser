@@ -168,10 +168,8 @@ class NeuralContainer(object):
     def import_model(self, path):
         model = keras.models.load_model(path, custom_objects={"SparseEmbedding":SparseEmbedding})
         #now check if model is compatible with vocab size and seq length
-        if model.get_layer("embeddings").input_dim != self.vocab_size +1:
+        if model.get_layer("embedding").vocab_size != self.vocab_size +1:
             raise ValueError("Mismatch between sequencer and imported model's vocab size")
-        elif model.get_layer("embeddings").input_length != self.seq_len:
-            raise ValueError("Mismatch between sequencer and imported model's input length")
         elif model.get_layer("probabilities").units != self.num_labels:
             raise ValueError("Mismatch between container labels and imported model's output length")
         return model

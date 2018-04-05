@@ -25,8 +25,8 @@ def predict(df, concordance=None):
     print("Loaded model.")
 
     #text to seqs
-    seqs, seq_wghts = classifier.sequence(texts)
-    x = {"seqs":seqs, "seq_wghts":seq_wghts}
+    ids, wghts = classifier.sequence(texts)
+    x = {"input_ids":ids, "input_weights":wghts}
     print("Processed input.")
     
     #raw prediction probabilities
