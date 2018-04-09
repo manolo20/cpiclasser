@@ -136,8 +136,9 @@ class NeuralContainer(object):
     def encode_labels(self, targets):
         return targets.map(self.labels["prediction_idx"]).values
 
-    def create_model(self, hidden_units=100, non_linear=False, 
-	                 lr=0.002, dropout=0.1, embeddings_regularizer=1e-6, **kwargs):
+    def create_model(self, hidden_units=100, non_linear=False, combiner="sum",
+	                 lr=0.002, dropout=0.1, embeddings_regularizer=1e-6,
+					 prob_regularizer=0.0, **kwargs):
         args = locals()
         
         input_ids = layers.Input(shape=(self.vocab_size+1,), sparse=True, dtype="int64", name="input_ids")
@@ -147,6 +148,7 @@ class NeuralContainer(object):
         embedded = SparseEmbedding(vocab_size=self.vocab_size+1,
                                    embedding_size=hidden_units,
                                    embeddings_regularizer=keras.regularizers.l2(embeddings_regularizer),
+								   combiner=combiner,
                                    name="embedding")([input_ids, input_weights])
 
         #some regularization in the form of dropout, if greater than 0
@@ -156,7 +158,9 @@ class NeuralContainer(object):
             embedded = layers.Dense(units=hidden_units, activation="tanh", name="non_linear")(embedded)
             embedded = layers.Dropout(dropout)(embedded)
 
-        probabilities = layers.Dense(units=self.num_labels, activation="softmax",
+        probabilities = layers.Dense(units=self.num_labels,
+		                             activation="softmax",
+									 kernel_regularizer=keras.regularizers.l2(prob_regularizer),
                                      name="probabilities")(embedded)
 
         classify_model = keras.Model(inputs=[input_ids, input_weights], outputs=probabilities)
