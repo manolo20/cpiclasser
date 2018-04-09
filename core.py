@@ -160,7 +160,7 @@ class NeuralContainer(object):
 
         probabilities = layers.Dense(units=self.num_labels,
 		                             activation="softmax",
-									 kernel_regularizer=prob_regularizer,
+									 kernel_regularizer=keras.regularizers.l2(prob_regularizer),
                                      name="probabilities")(embedded)
 
         classify_model = keras.Model(inputs=[input_ids, input_weights], outputs=probabilities)
