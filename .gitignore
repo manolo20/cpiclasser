@@ -17,3 +17,8 @@ __pycache__/
 .idea
 .vscode
 
+#exclude everhting ing model/ direcotry
+model/*
+#but don't ignore README
+!model/README.md
+

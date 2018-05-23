@@ -1,5 +1,4 @@
 import keras
-from keras import layers
 from keras import backend as K
 import tensorflow as tf    
 
@@ -175,7 +174,7 @@ class Attention(keras.layers.Layer):
     
        
 #custom Keras layer fo average embedding using weights
-class WeigtedAverage(layers.Layer):
+class WeigtedAverage(keras.layers.Layer):
     def __init__(self, **kwargs):
         super(WeigtedAverage, self).__init__(**kwargs)
 
@@ -198,7 +197,7 @@ class WeigtedAverage(layers.Layer):
 
         return avg
 
-class SparseEmbedding(layers.Layer):
+class SparseEmbedding(keras.layers.Layer):
     """This layer takes two 2d SparseTensor as inputs
     and returns a dense 2d Tensor. It does this by embedding
     and then combining the first SparseTensor, using the second as weights.

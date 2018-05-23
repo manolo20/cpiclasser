@@ -7,19 +7,14 @@ This module contains functions and classes that are useful both when developing
 and using a model.
 """
 import os
-import sys
 import re
 import pathlib
-import pickle
 import json
 from inspect import getsource
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import strip_accents_ascii
 import keras
-from keras import layers
-from keras import backend as K
-import tensorflow as tf
 from sklearn.utils.murmurhash import murmurhash3_bytes_s32
 
 #some cleaning: all letters converted to lowercase and the stripping of non-alphanumeric character
@@ -255,7 +250,6 @@ class NeuralClasser(object):
             x,
             y,
             epochs=500,
-            validation_data=None,
             callbacks=None,
             class_weights=None):
         train_generator = PadderSequence(x=x,
@@ -291,10 +285,9 @@ class NeuralClasser(object):
         sorted_probs = -np.sort(-probs)
         results = {}
         for i in range(n):
-            #CAN UPDATE TO INCOROREPATE MULTIPLE LAVEL COLUMNS IN BY LOOPING
-            #WOULD HAVE TO EXCLUDE "prediction_idx"
-            results["Pred_Label" + str(i)] = self.labels.index.values[sorted_probs_idxs[:,i]]
             results["Pred_Prob" + str(i)] = sorted_probs[:,i]
+            for col in self.labels.columns:
+                results["Pred_" +col + str(i)] = self.labels.loc[sorted_probs_idxs[:,i], col].values
         return pd.DataFrame(results)
 
     def save(self,
@@ -310,21 +303,25 @@ class NeuralClasser(object):
         #now save parameters
         #first make into dict
         params = {
-                "model_args":self.model_args,
                 "batch_size":self.batch_size,
                 "char_ngrams":self.char_ngrams,
                 "word_ngrams":self.word_ngrams,
-                "vocab_size":self.vocab_size
-        }
+                "vocab_size":self.vocab_size,
+                **self.model_args
+                }
         with open(os.path.join(out_dir, "model_params.txt"), 'w') as f:  
             json.dump(params, f, indent=4, separators=(',', ': '))
         #save both model string (so can read) and pickled (so can load)
-        with open(os.path.join(out_dir, "model_func.txt"), 'w') as f:  
+        with open(os.path.join(out_dir, "model_func.py"), 'w') as f:  
             f.write(self.model_string)
-        with open(os.path.join(out_dir, "model_func.pkl"), 'wb') as f:
-            pickle.dump(self.model_func, f)
+        #with open(os.path.join(out_dir, "model_func.pkl"), 'wb') as f:
+            #pickle.dump(self.model_func, f)
+            
+        #create empty __init__.py file so can import model_func
+        with open(os.path.join(out_dir, "__init__.py"), 'w') as f:  
+            pass
         #now labels
-        self.labels.to_csv(os.path.join(out_dir, 'labels.csv'))
+        self.labels.to_csv(os.path.join(out_dir, 'labels.csv'), index=False)
         #finally, model weghts
         self.model.save_weights(os.path.join(out_dir, 'model_weights.h5'))
         
@@ -345,11 +342,12 @@ def load_classer(in_dir):
     with open(os.path.join(in_dir, "model_params.txt")) as f:
         params = json.load(f)
     #now model_func
-    with open(os.path.join(in_dir, "model_func.pkl"), "rb") as f:
-        model_func = pickle.load(f)
+    #import, it is already on path
+    from cpiclasser.model.model_func import model_func
+    #with open(os.path.join(in_dir, "model_func.pkl"), "rb") as f:
+        #model_func = pickle.load(f)
     #now labels
-    labels = pd.read_csv(os.path.join(in_dir, "labels.csv"),
-                         index_col="label")
+    labels = pd.read_csv(os.path.join(in_dir, "labels.csv"))
     classer = NeuralClasser(labels=labels,
                          model_func=model_func,
                          **params)

@@ -6,6 +6,7 @@ import pathlib
 import os
 from inspect import getsource
 import time
+import random
 import operator
 import collections
 import itertools
@@ -16,7 +17,6 @@ from sklearn.model_selection import BaseCrossValidator
 from keras.callbacks import Callback
 from math import ceil
 import keras.backend as K
-
 from . import core
 
 class CustomCV(BaseCrossValidator):
@@ -245,8 +245,16 @@ class NeuralSearcher():
         self.class_weights=class_weights
         self.model_func = model_func
 
-        #make model arguments sinto grid
-        self.param_grid = make_grid(model_param_possibilites)
+        #make model arguments into grid if a dictionary
+        #if not a dict, should be a list or tuple
+        if isinstance(model_param_possibilites, dict):
+            self.param_grid = make_grid(model_param_possibilites)
+        elif isinstance(model_param_possibilites, (tuple, list)):
+            self.param_grid = model_param_possibilites
+        else:
+            raise ValueError("""model_param_possibilites argument needs to be either a
+                             dictionary (in which case a grid will be created) or an iterable
+                             list or tuple of dicionaties of model parameters""")
         self.model_specs = [key for key in model_param_possibilites]
         self.verbose = verbose
         #need to add since starts from 0
@@ -334,7 +342,7 @@ class NeuralEvolver():
                 population_per_fold=20,
                 retain=0.4,
                 random_select=0.1,
-                mutate_chance=0.10,
+                mutate_chance=0.05,
                 class_weights=None):
         """
         Should consider moving out the stuff lik texts, y
@@ -367,7 +375,7 @@ class NeuralEvolver():
         self.mutate_chance = mutate_chance
         self.population_per_fold = population_per_fold
 
-    def __create_pioneers__(self):
+    def __create_generation__(self, size):
         """Create first generation of network params
            Only needs to be called once, at start of fit
 
@@ -378,7 +386,7 @@ class NeuralEvolver():
         "Return li of dictionaruies with model args"""
 
         pop = []
-        for _ in range(self.population_per_fold):
+        for _ in range(size):
             # Create a set of network parameters
             model_params = {}
             for param, values in self.possible_params.items():
@@ -422,13 +430,15 @@ class NeuralEvolver():
             children.append(child)
         return children
 
-    def fit(self):
-    #there's really no arguments to provide
-    #that is bad, should move some from init
-    #this does the heavy lifting, it evolves the sepcdied number of generations
-    
+    def fit(self, initial_pop=[]):
+        """this does the heavy lifting, it evolves the sepcdied number of generations
+        initial_pop can be a list of instantiated NeuralValidator objects
+        up to a a length of self.population per fold
+        if less, then new specimens are generated to get up to desired"""
+        
         #start with first gen
-        generation = self.__create_pioneers__()
+        specimens_needed = self.population_per_fold - len(initial_pop)
+        generation = self.__create_generation__(specimens_needed)
         for fold_idx, (train_index, valid_index) in enumerate(self.fold_indexes):
             print("\n"+"*"*20+"\n")
             print("Starting fold (generation) {}/{}".format(fold_idx+1, self.n_folds))
@@ -449,7 +459,7 @@ class NeuralEvolver():
             #don't evolve if last fold (generation)
             if (fold_idx + 1) < len(self.fold_indexes):
                 generation = self.__evolve__(generation)
-            
+            self.results = generation
     def __evolve__(self, generation):
         #now sort networks based on score (best_f1)
         graded = [x for x in sorted(generation, key=lambda x: x.scores[-1]["best_f1"], reverse=True)]
@@ -488,4 +498,16 @@ class NeuralEvolver():
                     # Don't grow larger than desired length.
                     if len(children) < desired_length:
                         children.append(baby)
+        parents.extend(children)
         return parents
+    
+    def save(self, out_path):
+        results = []
+        for network in self.results:
+            result = network.model_params.copy()
+            for key, value in network.scores:
+                #taking mean of scores
+                result[key] = sum(value)/len(value)
+            results.append(result)
+            results = pd.DataFrame(results)
+            results.to_csv(out_path, index=False)
