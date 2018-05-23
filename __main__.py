@@ -7,14 +7,24 @@ import os
 import argparse
 import pandas as pd
 #add grand-parent folder of file to python path, so can import prediction
-GRANDPARENT_DIR = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
+PARENT_DIR = os.path.abspath(os.path.join(__file__, os.pardir))
+GRANDPARENT_DIR = os.path.join(PARENT_DIR, os.pardir)
 sys.path.insert(0, GRANDPARENT_DIR)
 import cpiclasser
 
-__author__ = "Ross Beck-MacNeil"
-__email__ = "ross.beck-macneil@canada.ca"
-__division__ = "CPD/DPC"
-__version__ = "0.10.1"
+
+def main(in_path, out_path, index, n_preds):
+    df = pd.read_csv(in_path, index_col=index, dtype=str, keep_default_na=False)
+    print("\nRead in data. It has {} rows and {} columns\n".format(df.shape[0], df.shape[1]))
+    #now load model
+    model = cpiclasser.load_classer((os.path.join(PARENT_DIR, "model")))
+    print("\nLoaded model")
+    #Transform from dataframe into a list of tuples
+    texts = [tuple(row) for row in df.values]
+    top_class = model.predict_top_n(texts, n=n_preds)
+    top_class[df.index.name] = df.index
+    top_class.set_index(df.index.name, inplace=True)
+    return top_class
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(__doc__)
@@ -29,18 +39,19 @@ if __name__ == '__main__':
                         " All other variables will be used as features."
                         " If not provided, an index from 0 to number of"
                         " products will be generated.", default = None)
+    parser.add_argument("--n_preds", type=int,
+                        help = """Number of predicted classes to output.
+                                  Columns are suffixed with the index, starting
+                                  with 0 and going to n-1, in decreasing order of
+                                  probability """, default = 1)
+    
     args = parser.parse_args()
 
     in_path = args.in_path
     out_path = args.out_path
     index = args.index
-    df = pd.read_csv(in_path, index_col=index, dtype=str, keep_default_na=False)
-    print("\nRead in data. It has {} rows and {} columns\n".format(df.shape[0], df.shape[1]))
-    probs, labels = cpiclasser.prediction.predict(df)
-    
-    top_class = cpiclasser.prediction.top_n(probs, labels)
-    top_class[df.index.name] = df.index
-    top_class.set_index(df.index.name, inplace=True)
+    n_preds = args.n_preds
+    top_class = main(in_path, out_path, index, n_preds)
 
     top_class.to_csv(out_path)
 
