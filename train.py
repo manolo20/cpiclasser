@@ -363,7 +363,6 @@ class NeuralEvolver():
         self.class_weights=class_weights
         self.model_func = model_func
         #make certain that value are all iterable (list or tuple)
-
         self.possible_params = collections.defaultdict(list)
         for key, value in possible_params.items():
             if isinstance(value, (tuple,list)):
@@ -504,10 +503,8 @@ class NeuralEvolver():
     def save(self, out_path):
         results = []
         for network in self.results:
-            result = network.model_params.copy()
-            for key, value in network.scores:
-                #taking mean of scores
-                result[key] = sum(value)/len(value)
+            result = pd.DataFrame(network.scores).mean()
+            for key, value in network.model_params.items():
+                result[key] = value
             results.append(result)
-            results = pd.DataFrame(results)
-            results.to_csv(out_path, index=False)
+            pd.concat(results, axis=1).T.to_csv(out_path, index=False)
