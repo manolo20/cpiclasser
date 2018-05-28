@@ -6,6 +6,7 @@ import sys
 import os
 import argparse
 import pandas as pd
+import numpy as np
 #add grand-parent folder of file to python path, so can import prediction
 PARENT_DIR = os.path.abspath(os.path.join(__file__, os.pardir))
 GRANDPARENT_DIR = os.path.join(PARENT_DIR, os.pardir)
@@ -21,6 +22,8 @@ def main(in_path, out_path, index, n_preds):
     print("\nLoaded model")
     #Transform from dataframe into a list of tuples
     texts = [tuple(row) for row in df.values]
+    #make into an array for slicing
+    texts = np.array(texts)
     top_class = model.predict_top_n(texts, n=n_preds)
     top_class[df.index.name] = df.index
     top_class.set_index(df.index.name, inplace=True)
