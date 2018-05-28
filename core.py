@@ -182,8 +182,9 @@ class PadderSequence(keras.utils.Sequence):
     def on_epoch_end(self):
         rng_state = np.random.get_state()
         np.random.shuffle(self.x)
-        np.random.set_state(rng_state)
-        np.random.shuffle(self.y)
+        if self.y is not None:
+            np.random.set_state(rng_state)
+            np.random.shuffle(self.y)
         if self.shapes is not None:
             np.random.set_state(rng_state)
             np.random.shuffle(self.shapes)
