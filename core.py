@@ -180,11 +180,14 @@ class PadderSequence(keras.utils.Sequence):
         batch_y = self.y[idx * self.batch_size:(idx + 1) * self.batch_size]
         return x, batch_y
     def on_epoch_end(self):
-        shuffled_idxs = np.random.permutation(len(self.x))
-        self.x = self.x[shuffled_idxs]
-        self.y = self.y[shuffled_idxs]
+        rng_state = np.random.get_state()
+        np.random.shuffle(self.x)
+        if self.y is not None:
+            np.random.set_state(rng_state)
+            np.random.shuffle(self.y)
         if self.shapes is not None:
-            self.shapes = self.shapes[shuffled_idxs]
+            np.random.set_state(rng_state)
+            np.random.shuffle(self.shapes)
     
 class NeuralClasser(object):
     def __init__(self,
