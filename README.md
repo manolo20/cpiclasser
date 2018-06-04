@@ -1,17 +1,12 @@
 # cpiclasser:
 **AUTHOR**: Ross Beck-MacNeil (CPD) - ross.beck-macneil@canada.ca
 
-This Python package contains code for classifying scanner and webscraped data to the CPI classsification system.
+This Python package contains code that helps with classifying scanner and webscraped data to the CPI classsification system. It is also general enough to work for other text classificaton problems.
 
 ## HOW TO USE:
-If downloading directly from Gitlab, you can add the directory to your Python path. You can then import the module
-and use its functions and classes to help develop machine learning models. 
-
-Alternatively, you can access the version of the package that is stored on CPD's
-shared drive at [P:\Research\Code Library (CoLi)]. This version of the package
-is almost guaranteed to not be broken and should contain the latest pretrained
-model as well as some notebooks that how to use the package to train models and
-make predictions. Alternatively, you invoke the module from command line on the folder like so:
+You can access a preliminary, pretrained, model through the Github release functionality.
+This model will classify products to the published food classes. You invoke the module from command line
+on the folder like so:
 
 ```
 python cpiclasser in_path out_path
@@ -28,11 +23,8 @@ python cpiclasser /my/home/dir/products_to_classify.csv /my/home/dir/classified_
 
 Please note that the input file must be encoded as utf-8. 
 
-**N.B**: If accessing the package from the P drive, please make certain not
-to update or delete any files. It is probably best to make a copy of the notebooks
-to somewhere else.
 
-## Dependcies :
+## Dependencies :
 This package has been developed with the following setup:
 * Anaconda 4.4.0 (64 bit) for Python version 3.6 
 * scikit-learn 0.19.1 
